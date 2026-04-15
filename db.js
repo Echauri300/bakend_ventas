@@ -1,11 +1,21 @@
 const mysql = require('mysql2/promise');
 
-const pool = mysql.createPool({
+const poolPos = mysql.createPool({
     host: 'localhost',
     user: 'root',
     password: '',
     database: 'pos_app',
 });
 
-module.exports = pool;
+const poolPega = mysql.createPool({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'pega_pruebas',
+});
+
+module.exports = {
+    poolPos,
+    poolPega
+};
 
