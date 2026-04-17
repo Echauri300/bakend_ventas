@@ -66,7 +66,7 @@ app.get('/productos', async (req, res) => {
     }
 });
 
-//
+//Crear venta
 app.post('/ventas', async (req, res) => {
     const {cliente_id, items, total} = req.body;
 
@@ -119,6 +119,45 @@ app.post('/ventas', async (req, res) => {
 
 });
 
+//Listar ventas
+app.get('/ventas', async (req, res) => {
+    try {
+        const [rows] = await poolPos.query(`
+            SELECT id, cliente_id, total
+            FROM ventas
+            ORDER BY id DESC    
+        `);
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(5000).json({error: 'Error obteniendo ventas'});
+    }
+});
+
+//Detalle de una venta
+app.get('/ventas/:id', async (req, res) => {
+    const {id} = req.params;
+
+    try {
+        const [rows] = await poolPos.query(`
+            SELECT
+                vd.cantidad,
+                p.codigo,
+                p.descripcion_producto,
+                p.precio_costo
+            FROM venta_detalles vd
+            JOIN productos p ON p.codigo = vd.producto_id
+            WHERE vd.venta_id = ?    
+        `, [id]);
+
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({error: 'Error obteniendo detalle'});
+    }
+});
+
+//
 app.get('/depositos', async (req, res) => {
     try { 
         const [rows] = await poolPos.query('SELECT * FROM depositos');
