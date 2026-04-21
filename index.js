@@ -18,6 +18,28 @@ app.get('/test-db', async (req, res) => { //crea un endpoint de prueba
 
 app.use(express.json()); //(app.use) agrega el middleware, (express.json()) convierte el JSON a un objeto JS 
 
+//Busqueda vendedores
+app.get('/vendedores/search', async (req, res) => {
+    const {q} = req.query;
+    
+    try{
+        const [rows] = await poolPega.query(`
+            SELECT 
+                cod_vendedor, 
+                nombre_apellido
+            FROM pega_pruebas.vendedores
+            WHERE nombre_apellido LIKE ? 
+            LIMIT 10 
+            `,
+            [`%${q}%`]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error buscando vendedores'});
+    }
+});
+
 //Busqueda clientes
 app.get('/clientes/search', async (req, res) => {
     const { q } = req.query;
@@ -68,7 +90,7 @@ app.get('/productos', async (req, res) => {
 
 //Crear venta
 app.post('/ventas', async (req, res) => {
-    const {cliente_id, items, total} = req.body;
+    const {cliente_id, vendedor_id, items, total} = req.body;
 
     //VALIDACIÓN
     if(
@@ -88,8 +110,8 @@ app.post('/ventas', async (req, res) => {
             await connection.beginTransaction();
             //1. GUARDAR VENTA
             const [result] = await connection.query(
-                'INSERT INTO ventas (cliente_id, total) VALUES (?, ?)',
-                [cliente_id, total]
+                'INSERT INTO ventas (cliente_id, vendedor_id, total) VALUES (?, ?, ?)',
+                [cliente_id, vendedor_id, total]
             );
 
             const ventaId = result.insertId;
@@ -123,14 +145,25 @@ app.post('/ventas', async (req, res) => {
 app.get('/ventas', async (req, res) => {
     try {
         const [rows] = await poolPos.query(`
-            SELECT id, cliente_id, total
-            FROM ventas
-            ORDER BY id DESC    
+            SELECT 
+                v.id, 
+                v.cliente_id, 
+                v.vendedor_id,
+                v.total,
+                v.fecha,
+                c.nombre_cliente as cliente_nombre,
+                ven.nombre_apellido as vendedor_nombre
+            FROM ventas v
+            LEFT JOIN pega_pruebas.clientes c
+                ON c.cod_cliente = v.cliente_id
+            LEFT JOIN pega_pruebas.vendedores ven
+                ON ven.cod_vendedor = v.vendedor_id
+            ORDER BY v.id DESC
         `);
         res.json(rows);
     } catch (error) {
         console.error(error);
-        res.status(5000).json({error: 'Error obteniendo ventas'});
+        res.status(500).json({error: 'Error obteniendo ventas'});
     }
 });
 
@@ -145,8 +178,8 @@ app.get('/ventas/:id', async (req, res) => {
                 p.codigo,
                 p.descripcion_producto,
                 p.precio_costo
-            FROM venta_detalles vd
-            JOIN productos p ON p.codigo = vd.producto_id
+            FROM pos_app.venta_detalles vd
+            JOIN pega_pruebas.productos p ON p.codigo = vd.producto_id
             WHERE vd.venta_id = ?    
         `, [id]);
 
@@ -157,7 +190,28 @@ app.get('/ventas/:id', async (req, res) => {
     }
 });
 
-//
+//Mostrar estadisticas de ventas
+app.get('/ventas/stats/:vendedorId', async (req, res) => {
+    const {vendedorId} = req.params;
+
+    try { 
+        const [rows] = await poolPos.query(`
+            SELECT
+                COUNT(*) as cantidad_ventas,  
+                COALESCE(SUM(total), 0) as total_vendido
+            FROM ventas
+            WHERE vendedor_id = ?
+            AND DATE(fecha) = CURDATE()  
+        `,  [vendedorId]);
+
+        res.json(rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error obteniendo stats' });
+    }
+});
+
+//Listar depositos
 app.get('/depositos', async (req, res) => {
     try { 
         const [rows] = await poolPos.query('SELECT * FROM depositos');
