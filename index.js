@@ -193,6 +193,17 @@ app.get('/ventas/:id', async (req, res) => {
 //Mostrar estadisticas de ventas
 app.get('/ventas/stats/:vendedorId', async (req, res) => {
     const {vendedorId} = req.params;
+    const {rango = 'hoy'} = req.query;
+
+    let condicionFecha = '';
+
+    if (rango == 'hoy') {
+        condicionFecha = 'DATE(fecha) = CURDATE()';
+    } else if (rango == 'semana') {
+        condicionFecha = 'YEARWEEK(fecha, 1) = YEARWEEK(CURDATE(), 1)';
+    } else if (rango == 'mes') {
+        condicionFecha = 'MONTH(fecha)  = MONTH(CURDATE()) AND YEAR(fecha) = YEAR(CURDATE())';
+    }
 
     try { 
         const [rows] = await poolPos.query(`
@@ -201,7 +212,7 @@ app.get('/ventas/stats/:vendedorId', async (req, res) => {
                 COALESCE(SUM(total), 0) as total_vendido
             FROM ventas
             WHERE vendedor_id = ?
-            AND DATE(fecha) = CURDATE()  
+            AND ${condicionFecha}
         `,  [vendedorId]);
 
         res.json(rows[0]);
